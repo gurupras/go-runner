@@ -21,7 +21,7 @@ var (
 	app       = kingpin.New("runctl", "Control a runner server")
 	verbose   = app.Flag("verbose", "Enable verbose logs").Short('v').Default("false").Bool()
 	workQueue = app.Flag("work-queue", "Use a specific work-queue").Short('w').Required().String()
-	redisAddr = app.Flag("redis-addr", "Redis address").Short('R').Required().String()
+	redisAddr = app.Flag("redis-addr", "Redis address").Short('R').Default("127.0.0.1:6379").String()
 
 	stop = app.Command("stop", "Stop a runner")
 

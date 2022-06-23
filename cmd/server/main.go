@@ -14,7 +14,7 @@ var (
 	verbose   = kingpin.Flag("verbose", "Enable verbose logs").Short('v').Default("false").Bool()
 	workQueue = kingpin.Flag("work-queue", "Use a specific work-queue").Short('w').Required().String()
 	numProcs  = kingpin.Flag("num-procs", "Number of processes to run in parallel").Short('j').Default(fmt.Sprintf("%v", runtime.NumCPU())).Int()
-	redisAddr = kingpin.Flag("redis-addr", "Redis address").Short('R').Required().String()
+	redisAddr = kingpin.Flag("redis-addr", "Redis address").Short('R').Default("127.0.0.1:6379").String()
 )
 
 func main() {
