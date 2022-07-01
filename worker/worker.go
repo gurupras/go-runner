@@ -26,11 +26,12 @@ type Worker struct {
 }
 
 type WorkPacket struct {
-	Id          string            `json:"id"`
-	Environment map[string]string `json:"environment,omitempty"`
-	Command     string            `json:"command"`
-	Args        []string          `json:"args,omitempty"`
-	Dir         string            `json:"dir"`
+	Id            string            `json:"id"`
+	Environment   map[string]string `json:"environment,omitempty"`
+	Command       string            `json:"command"`
+	Args          []string          `json:"args,omitempty"`
+	Dir           string            `json:"dir"`
+	PublishResult *bool             `json:"publishResult"`
 }
 
 type Result struct {
@@ -76,6 +77,15 @@ var handleWork = func(source string, workBytes []byte) (*Result, *WorkPacket) {
 		result.Code = -1
 		result.Error = "must specify command"
 		return result, nil
+	}
+	// Add source to environment so logs/etc can be directed accordingly
+	if pkt.Environment == nil {
+		pkt.Environment = make(map[string]string)
+	}
+	pkt.Environment["RUNNER_WORKER_ID"] = source
+	if pkt.PublishResult == nil {
+		tmp := true
+		pkt.PublishResult = &tmp
 	}
 	workStart := time.Now()
 	log.Debugf("[%v]: Starting work: %v", source, pkt.Command)
@@ -142,9 +152,11 @@ func (w *Worker) Start() {
 				log.Debugf("[%v]: Got work", w.id)
 				result, pkt := handleWork(w.id, work)
 				b, _ := json.Marshal(result)
-				w.transport.Send(fmt.Sprintf("%v:results", w.workQueue)) <- b
+				if *pkt.PublishResult {
+					w.transport.Send(fmt.Sprintf("%v:results", w.workQueue)) <- b
+				}
 				log.Debugf("packet id=%v", pkt.Id)
-				if strings.Compare(pkt.Id, "") != 0 {
+				if strings.Compare(pkt.Id, "") != 0 && *pkt.PublishResult {
 					// Send result down specific channel as well
 					log.Debugf("[%v]: Sent results down packet-result channel", w.id)
 					w.transport.Send(fmt.Sprintf("%v:results:%v", w.workQueue, pkt.Id)) <- b

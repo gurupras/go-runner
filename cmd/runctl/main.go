@@ -77,8 +77,10 @@ func main() {
 		}
 		id := ""
 		var result worker.Result
+		publishResult := false
 		wg := sync.WaitGroup{}
 		if *submitWait {
+			publishResult = true
 			// Set up listener before submitting work
 			id, _ = gonanoid.New(8)
 			wg.Add(1)
@@ -89,11 +91,12 @@ func main() {
 			}()
 		}
 		pkt := worker.WorkPacket{
-			Id:          id,
-			Environment: env,
-			Command:     tokens[0],
-			Args:        tokens[1:],
-			Dir:         *submitCwd,
+			Id:            id,
+			Environment:   env,
+			Command:       tokens[0],
+			Args:          tokens[1:],
+			Dir:           *submitCwd,
+			PublishResult: &publishResult,
 		}
 		b, _ := json.Marshal(pkt)
 		transport.Send(*workQueue) <- b
