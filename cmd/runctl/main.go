@@ -30,6 +30,7 @@ var (
 	submitEnv  = submit.Flag("env", "Environment variables to set. Expected to be of the form KEY=VAR. Multiple values are separated by semi-colon").Short('e').Default("").String()
 	submitCwd  = submit.Flag("cwd", "Current working directory for the command").Default("").String()
 	submitWait = submit.Flag("wait", "Wait for result").Short('W').Default("true").Bool()
+	numJobs    = submit.Flag("num-jobs", "Number of times to submit the job").Short('j').Default("1").Int()
 )
 
 func main() {
@@ -75,38 +76,62 @@ func main() {
 		if err != nil {
 			log.Fatalf("Invalid command: %v", err)
 		}
-		id := ""
-		var result worker.Result
+
+		resultChan := make(chan *worker.Result)
+
 		publishResult := false
 		wg := sync.WaitGroup{}
+
+		var ids []string
 		if *submitWait {
+			ids = make([]string, *numJobs)
+			for idx := 0; idx < *numJobs; idx++ {
+				id, _ := gonanoid.New(8)
+				ids[idx] = id
+			}
+			wg.Add(1)
 			publishResult = true
 			// Set up listener before submitting work
-			id, _ = gonanoid.New(8)
-			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				b := <-transport.Receive(fmt.Sprintf("%v:results:%v", *workQueue, id))
-				json.Unmarshal(b, &result)
+				for result := range resultChan {
+					if result.Code == 0 {
+						fmt.Printf("%v\n", strings.TrimSpace(result.Stdout))
+					} else {
+						fmt.Printf("%v\n", strings.TrimSpace(result.Stderr))
+					}
+				}
+			}()
+			go func() {
+				defer close(resultChan)
+				for idx := 0; idx < *numJobs; idx++ {
+					id := ids[idx]
+					var result worker.Result
+					b := <-transport.Receive(fmt.Sprintf("%v:results:%v", *workQueue, id))
+					json.Unmarshal(b, &result)
+					resultChan <- &result
+				}
 			}()
 		}
-		pkt := worker.WorkPacket{
-			Id:            id,
-			Environment:   env,
-			Command:       tokens[0],
-			Args:          tokens[1:],
-			Dir:           *submitCwd,
-			PublishResult: &publishResult,
+		for idx := 0; idx < *numJobs; idx++ {
+			id := ""
+			if *submitWait {
+				id = ids[idx]
+			}
+			pkt := worker.WorkPacket{
+				Id:            id,
+				Environment:   env,
+				Command:       tokens[0],
+				Args:          tokens[1:],
+				Dir:           *submitCwd,
+				PublishResult: &publishResult,
+			}
+			b, _ := json.Marshal(pkt)
+			transport.Send(*workQueue) <- b
 		}
-		b, _ := json.Marshal(pkt)
-		transport.Send(*workQueue) <- b
+
 		if *submitWait {
 			wg.Wait()
-			if result.Code == 0 {
-				fmt.Printf("%v\n", strings.TrimSpace(result.Stdout))
-			} else {
-				fmt.Printf("%v\n", strings.TrimSpace(result.Stderr))
-			}
 		}
 	}
 }
