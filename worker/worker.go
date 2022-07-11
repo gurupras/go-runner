@@ -98,6 +98,8 @@ var handleWork = func(source string, workBytes []byte) (*Result, *WorkPacket) {
 
 var runWork = func(work *WorkPacket, result *Result) {
 	cmd := exec.Command(work.Command, work.Args...)
+	// Get all current environment variables and add them
+	cmd.Env = append(cmd.Env, os.Environ()...)
 	for k, v := range work.Environment {
 		cmd.Env = append(cmd.Env, fmt.Sprintf(`%v=%v`, k, v))
 	}
